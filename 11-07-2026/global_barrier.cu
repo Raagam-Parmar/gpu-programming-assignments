@@ -14,6 +14,11 @@
  * > requires that it be possible to execute thread blocks in any order,
  * > in parallel or in series.
  *
+ * If the grid size launched is larger than the number of thread blocks the GPU
+ * can schedule concurrently, it will cause a deadlock.
+ *
+ * For example, setting NUM_BLOCKS to 641 causes a deadlock
+ *
  * Source: https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/programming-model.html#thread-blocks-and-grids
  *
  */
