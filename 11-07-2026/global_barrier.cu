@@ -17,7 +17,8 @@
  * If the grid size launched is larger than the number of thread blocks the GPU
  * can schedule concurrently, it will cause a deadlock.
  *
- * For example, setting NUM_BLOCKS to 641 causes a deadlock
+ * For example, setting NUM_BLOCKS to 641 causes a deadlock on Google Colab's
+ * GPUs, Tensor T4.
  *
  * Source: https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/programming-model.html#thread-blocks-and-grids
  *
