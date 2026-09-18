@@ -81,11 +81,9 @@ __global__ void BFS(graph g, int *dist, bool *changed, int dist_frontier) {
         int dest = g.edges[neighIdx];
         int new_dist = dist_frontier + 1;
 
-        int old_dist = new_dist;
+        dist[dest] = new_dist;
 
-        if (new_dist < old_dist) {
-            *changed = true;
-        }
+        *changed = true;
     }
 }
 
