@@ -2,6 +2,18 @@
 #include <cuda_runtime.h>
 #include <iostream>
 
+#define CHECK_CUDA(call)                                                        \
+    do {                                                                        \
+        cudaError_t const status = (call);                                      \
+        if (cudaSuccess != status) {                                            \
+            std::string error_msg = "CUDA Error: " +                            \
+                                    std::string(cudaGetErrorString(status)) +   \
+                                    " at " + __FILE__ + ":" +                   \
+                                    std::to_string(__LINE__);                   \
+            throw std::runtime_error(error_msg);                                \
+        }                                                                       \
+    } while (0)
+
 int getCoresPerSM(int major, int minor) {
     // Defines cores per SM based on architecture generation
     switch (major) {
@@ -34,7 +46,7 @@ int getCoresPerSM(int major, int minor) {
 
 int main() {
     int deviceCount = 0;
-    cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
+    CHECK_CUDA( cudaGetDeviceCount(&deviceCount) );
 
     if (deviceCount == 0) {
         printf("No available CUDA-capable devices.\n");
@@ -49,8 +61,7 @@ int main() {
 
         printf("---------------- Device %d: \"%s\" ----------------\n", i, prop.name);
         printf("CUDA Capability Major/Minor version:           %d.%d\n", prop.major, prop.minor);
-        printf("Total amount of global memory:                 %.2f GB\n",
-               (float)prop.totalGlobalMem / (1024.0f * 1024.0f * 1024.0f));
+        printf("Total amount of global memory:                 %.2f GB\n", (float)prop.totalGlobalMem / (1024.0f * 1024.0f * 1024.0f));
         printf("Number of Streaming Multiprocessors (SMs):     %d\n", prop.multiProcessorCount);
         printf("Total amount of constant memory:               %zu KB\n", prop.totalConstMem / 1024);
         printf("Total amount of shared memory per block:       %zu KB\n", prop.sharedMemPerBlock / 1024);
@@ -59,10 +70,8 @@ int main() {
         printf("Warp size:                                     %d threads\n", prop.warpSize);
         printf("Maximum number of threads per multiprocessor:  %d\n", prop.maxThreadsPerMultiProcessor);
         printf("Maximum number of threads per block:           %d\n", prop.maxThreadsPerBlock);
-        printf("Max dimension size of a thread block (x,y,z):  (%d, %d, %d)\n",
-               prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2]);
-        printf("Max dimension size of a grid size (x,y,z):     (%d, %d, %d)\n",
-               prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
+        printf("Max dimension size of a thread block (x,y,z):  (%d, %d, %d)\n", prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2]);
+        printf("Max dimension size of a grid size (x,y,z):     (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
         printf("Memory Clock Rate:                             %.2f MHz\n", prop.memoryClockRate * 1e-3f);
         printf("Memory Bus Width:                              %d-bit\n", prop.memoryBusWidth);
         printf("L2 Cache Size:                                 %d KB\n", prop.l2CacheSize / 1024);
