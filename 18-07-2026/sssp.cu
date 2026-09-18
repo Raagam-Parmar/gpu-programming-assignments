@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <climits>
 #include <cuda_runtime.h>
-#include <cuda/cmath>
 
 #define CHECK_CUDA(call)                                                      \
     do {                                                                      \
@@ -76,25 +75,27 @@ graph assoc_to_csr(const std::vector<edge>& edges) {
     return g;
 }
 
-__global__ void SSSP(graph g, weight_t *dist, bool *changed) {
+__global__ void SSSP(graph g, weight_t *dist, bool *changed, const bool *updated_current, bool *updated_next) {
     int src = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (src >= g.nVertices) return;
 
+    if (!updated_current[src]) return;
+
     int start_edge = g.offsets[src];
     int end_edge = g.offsets[src + 1];
 
-    if (dist[src] != INT_MAX) {
-        for (int neighIdx = start_edge; neighIdx < end_edge; neighIdx++) {
-            cell edge = g.edges[neighIdx];
-            int dest = edge.dest;
-            weight_t new_dist = dist[src] + edge.weight;
+    for (int neighIdx = start_edge; neighIdx < end_edge; neighIdx++) {
+        cell edge = g.edges[neighIdx];
+        int dest = edge.dest;
+        weight_t new_dist = dist[src] + edge.weight;
 
-            weight_t old_dist = atomicMin(&dist[dest], new_dist);
+        weight_t old_dist = atomicMin(&dist[dest], new_dist);
 
-            if (new_dist < old_dist) {
-                *changed = true;
-            }
+        if (new_dist < old_dist) {
+            *changed = true;
+
+            updated_next[dest] = true;
         }
     }
 }
@@ -121,7 +122,8 @@ int main() {
 
     int source_vertex = 0;
 
-    // Setup `dist` array for computation
+    // Setup `dist` array, which tracks the distance of each vertex from the
+    // source vertex
     weight_t *dist;
     CHECK_CUDA( cudaMallocManaged(&dist, g.nVertices * sizeof(weight_t)) );
 
@@ -130,18 +132,25 @@ int main() {
     }
     dist[source_vertex] = 0;
 
-    // Setup `changed` bool for computation
+    bool *updated_current;
+    bool *updated_next;
+    CHECK_CUDA( cudaMallocManaged(&updated_current, g.nVertices * sizeof(bool)) );
+    CHECK_CUDA( cudaMallocManaged(&updated_next, g.nVertices * sizeof(bool)) );
+
+    CHECK_CUDA( cudaMemset(updated_current, 0, g.nVertices * sizeof(bool)) );
+    CHECK_CUDA( cudaMemset(updated_next, 0, g.nVertices * sizeof(bool)) );
+    updated_current[source_vertex] = true;
+
     bool *changed;
     CHECK_CUDA( cudaMallocManaged(&changed, sizeof(bool)) );
 
     int threadsPerBlock = 256;
-    // int blocksPerGrid = (g.nVertices + threadsPerBlock - 1) / threadsPerBlock;
-    int blocksPerGrid = cuda::ceil_div(g.nVertices, threadsPerBlock);
+    int blocksPerGrid = (g.nVertices + threadsPerBlock - 1) / threadsPerBlock;
 
     for (int i = 0; i < g.nVertices - 1; i++) {
         *changed = false;
 
-        SSSP<<<blocksPerGrid, threadsPerBlock>>>(g, dist, changed);
+        SSSP<<<blocksPerGrid, threadsPerBlock>>>(g, dist, changed, updated_current, updated_next);
         CHECK_CUDA( cudaGetLastError() );
         CHECK_CUDA( cudaDeviceSynchronize() );
 
@@ -149,6 +158,11 @@ int main() {
             std::cout << "Converged after " << i + 1 << " iterations.\n\n";
             break;
         }
+
+        std::swap(updated_current, updated_next);
+
+        // Clear the new updated_next array for the upcoming iteration
+        CHECK_CUDA( cudaMemset(updated_next, 0, g.nVertices * sizeof(bool)) );
     }
 
     std::cout << "Shortest path distances from vertex " << source_vertex << ":\n";
